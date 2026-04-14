@@ -3,6 +3,10 @@ name = "pixl"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "pixl"
+path = "src/lib.rs"
+
 [[bin]]
 name = "pixl"
 path = "src/main.rs"
