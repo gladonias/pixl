@@ -1,0 +1,19 @@
+[package]
+name = "pixl"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "pixl"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+thiserror = "1"
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.2", features = ["client"] }
+wayland-protocols = { version = "0.31", features = ["client", "staging"] }
+x11rb = { version = "0.13", features = ["cursor"] }
+dbus = "0.9"
+
+[dev-dependencies]
