@@ -208,6 +208,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "dbus",
+ "libc",
  "thiserror",
  "wayland-client",
  "wayland-protocols",
