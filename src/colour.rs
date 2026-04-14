@@ -57,7 +57,11 @@ impl RgbColour {
 
         let h = if (max - r).abs() < f64::EPSILON {
             let segment = (g - b) / delta;
-            if segment < 0.0 { segment + 6.0 } else { segment }
+            if segment < 0.0 {
+                segment + 6.0
+            } else {
+                segment
+            }
         } else if (max - g).abs() < f64::EPSILON {
             (b - r) / delta + 2.0
         } else {
@@ -91,7 +95,11 @@ impl RgbColour {
 
         let h = if (max - r).abs() < f64::EPSILON {
             let segment = (g - b) / delta;
-            if segment < 0.0 { segment + 6.0 } else { segment }
+            if segment < 0.0 {
+                segment + 6.0
+            } else {
+                segment
+            }
         } else if (max - g).abs() < f64::EPSILON {
             (b - r) / delta + 2.0
         } else {

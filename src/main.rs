@@ -17,7 +17,11 @@ use std::env;
 use std::process;
 
 #[derive(Parser)]
-#[command(name = "pixl", version, about = "Grab a pixel colour and print it to stdout")]
+#[command(
+    name = "pixl",
+    version,
+    about = "Grab a pixel colour and print it to stdout"
+)]
 struct Cli {
     /// Output format: hex | rgb | hsl | hsv
     #[arg(short, long, default_value = "hex")]

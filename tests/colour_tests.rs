@@ -15,7 +15,15 @@ fn hex_black() {
 
 #[test]
 fn hex_white() {
-    assert_eq!(RgbColour { r: 255, g: 255, b: 255 }.to_hex(), "#ffffff");
+    assert_eq!(
+        RgbColour {
+            r: 255,
+            g: 255,
+            b: 255
+        }
+        .to_hex(),
+        "#ffffff"
+    );
 }
 
 #[test]
@@ -25,33 +33,57 @@ fn hex_red() {
 
 #[test]
 fn hex_midtone() {
-    assert_eq!(RgbColour { r: 128, g: 64, b: 192 }.to_hex(), "#8040c0");
+    assert_eq!(
+        RgbColour {
+            r: 128,
+            g: 64,
+            b: 192
+        }
+        .to_hex(),
+        "#8040c0"
+    );
 }
 
 // --- rgb ---
 
 #[test]
 fn rgb_black() {
-    assert_eq!(RgbColour { r: 0, g: 0, b: 0 }.to_rgb_string(), "rgb(0, 0, 0)");
+    assert_eq!(
+        RgbColour { r: 0, g: 0, b: 0 }.to_rgb_string(),
+        "rgb(0, 0, 0)"
+    );
 }
 
 #[test]
 fn rgb_white() {
     assert_eq!(
-        RgbColour { r: 255, g: 255, b: 255 }.to_rgb_string(),
+        RgbColour {
+            r: 255,
+            g: 255,
+            b: 255
+        }
+        .to_rgb_string(),
         "rgb(255, 255, 255)"
     );
 }
 
 #[test]
 fn rgb_red() {
-    assert_eq!(RgbColour { r: 255, g: 0, b: 0 }.to_rgb_string(), "rgb(255, 0, 0)");
+    assert_eq!(
+        RgbColour { r: 255, g: 0, b: 0 }.to_rgb_string(),
+        "rgb(255, 0, 0)"
+    );
 }
 
 #[test]
 fn rgb_midtone() {
     assert_eq!(
-        RgbColour { r: 128, g: 64, b: 192 }.to_rgb_string(),
+        RgbColour {
+            r: 128,
+            g: 64,
+            b: 192
+        }
+        .to_rgb_string(),
         "rgb(128, 64, 192)"
     );
 }
@@ -61,27 +93,43 @@ fn rgb_midtone() {
 
 #[test]
 fn hsl_black() {
-    assert_eq!(RgbColour { r: 0, g: 0, b: 0 }.to_hsl_string(), "hsl(0, 0%, 0%)");
+    assert_eq!(
+        RgbColour { r: 0, g: 0, b: 0 }.to_hsl_string(),
+        "hsl(0, 0%, 0%)"
+    );
 }
 
 #[test]
 fn hsl_white() {
     assert_eq!(
-        RgbColour { r: 255, g: 255, b: 255 }.to_hsl_string(),
+        RgbColour {
+            r: 255,
+            g: 255,
+            b: 255
+        }
+        .to_hsl_string(),
         "hsl(0, 0%, 100%)"
     );
 }
 
 #[test]
 fn hsl_red() {
-    assert_eq!(RgbColour { r: 255, g: 0, b: 0 }.to_hsl_string(), "hsl(0, 100%, 50%)");
+    assert_eq!(
+        RgbColour { r: 255, g: 0, b: 0 }.to_hsl_string(),
+        "hsl(0, 100%, 50%)"
+    );
 }
 
 #[test]
 fn hsl_midtone() {
     // RGB(128, 64, 192) => H=270, S=50%, L=50%
     assert_eq!(
-        RgbColour { r: 128, g: 64, b: 192 }.to_hsl_string(),
+        RgbColour {
+            r: 128,
+            g: 64,
+            b: 192
+        }
+        .to_hsl_string(),
         "hsl(270, 50%, 50%)"
     );
 }
@@ -91,27 +139,43 @@ fn hsl_midtone() {
 
 #[test]
 fn hsv_black() {
-    assert_eq!(RgbColour { r: 0, g: 0, b: 0 }.to_hsv_string(), "hsv(0, 0%, 0%)");
+    assert_eq!(
+        RgbColour { r: 0, g: 0, b: 0 }.to_hsv_string(),
+        "hsv(0, 0%, 0%)"
+    );
 }
 
 #[test]
 fn hsv_white() {
     assert_eq!(
-        RgbColour { r: 255, g: 255, b: 255 }.to_hsv_string(),
+        RgbColour {
+            r: 255,
+            g: 255,
+            b: 255
+        }
+        .to_hsv_string(),
         "hsv(0, 0%, 100%)"
     );
 }
 
 #[test]
 fn hsv_red() {
-    assert_eq!(RgbColour { r: 255, g: 0, b: 0 }.to_hsv_string(), "hsv(0, 100%, 100%)");
+    assert_eq!(
+        RgbColour { r: 255, g: 0, b: 0 }.to_hsv_string(),
+        "hsv(0, 100%, 100%)"
+    );
 }
 
 #[test]
 fn hsv_midtone() {
     // RGB(128, 64, 192) => H=270, S=67%, V=75%
     assert_eq!(
-        RgbColour { r: 128, g: 64, b: 192 }.to_hsv_string(),
+        RgbColour {
+            r: 128,
+            g: 64,
+            b: 192
+        }
+        .to_hsv_string(),
         "hsv(270, 67%, 75%)"
     );
 }
@@ -120,7 +184,11 @@ fn hsv_midtone() {
 
 #[test]
 fn roundtrip_hsl() {
-    let original = RgbColour { r: 128, g: 64, b: 192 };
+    let original = RgbColour {
+        r: 128,
+        g: 64,
+        b: 192,
+    };
     let (h, s, l) = original.to_hsl();
 
     // Convert HSL back to RGB
@@ -144,7 +212,19 @@ fn roundtrip_hsl() {
     let g = ((g1 + m) * 255.0).round() as i16;
     let b = ((b1 + m) * 255.0).round() as i16;
 
-    assert!((r - original.r as i16).abs() <= 1, "r: got {r}, expected {}", original.r);
-    assert!((g - original.g as i16).abs() <= 1, "g: got {g}, expected {}", original.g);
-    assert!((b - original.b as i16).abs() <= 1, "b: got {b}, expected {}", original.b);
+    assert!(
+        (r - original.r as i16).abs() <= 1,
+        "r: got {r}, expected {}",
+        original.r
+    );
+    assert!(
+        (g - original.g as i16).abs() <= 1,
+        "g: got {g}, expected {}",
+        original.g
+    );
+    assert!(
+        (b - original.b as i16).abs() <= 1,
+        "b: got {b}, expected {}",
+        original.b
+    );
 }

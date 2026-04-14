@@ -51,21 +51,24 @@ pub fn pick_colour() -> Result<RgbColour, PixlError> {
     // Add match for the Response signal
     let (tx, rx) = std::sync::mpsc::channel::<Result<RgbColour, PixlError>>();
 
-    let _signal_id = response_proxy.match_signal(
-        move |resp: OrgFreedesktopPortalRequestResponse, _conn: &Connection, _msg: &dbus::Message| {
-            let result = parse_pick_color_response(resp);
-            let _ = tx.send(result);
-            false // remove match after first signal
-        },
-    ).map_err(|e| {
-        PixlError::PortalUnavailable(format!("failed to listen for portal response: {}", e))
-    })?;
+    let _signal_id = response_proxy
+        .match_signal(
+            move |resp: OrgFreedesktopPortalRequestResponse,
+                  _conn: &Connection,
+                  _msg: &dbus::Message| {
+                let result = parse_pick_color_response(resp);
+                let _ = tx.send(result);
+                false // remove match after first signal
+            },
+        )
+        .map_err(|e| {
+            PixlError::PortalUnavailable(format!("failed to listen for portal response: {}", e))
+        })?;
 
     // Process D-Bus messages until we get the response
     loop {
-        conn.process(Duration::from_millis(200)).map_err(|e| {
-            PixlError::PortalUnavailable(format!("D-Bus processing error: {}", e))
-        })?;
+        conn.process(Duration::from_millis(200))
+            .map_err(|e| PixlError::PortalUnavailable(format!("D-Bus processing error: {}", e)))?;
 
         if let Ok(result) = rx.try_recv() {
             return result;
@@ -93,9 +96,7 @@ fn parse_pick_color_response(
         .as_iter()
         .ok_or_else(|| PixlError::CaptureError("colour value is not iterable".into()))?;
 
-    let channels: Vec<f64> = iter
-        .filter_map(|v: &dyn RefArg| v.as_f64())
-        .collect();
+    let channels: Vec<f64> = iter.filter_map(|v: &dyn RefArg| v.as_f64()).collect();
 
     if channels.len() < 3 {
         return Err(PixlError::CaptureError(format!(
