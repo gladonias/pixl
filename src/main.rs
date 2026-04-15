@@ -6,6 +6,7 @@
 
 mod colour;
 mod error;
+mod magnifier;
 mod portal;
 mod wayland;
 mod x11;
