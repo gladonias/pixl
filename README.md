@@ -15,7 +15,9 @@ pixl follows the Unix philosophy:
 - **Zero runtime dependencies** — single compiled binary, nothing to install.
 - **Composable** — output goes to stdout; the shell handles the rest.
 - **No GUI, no config, no daemon** — just a tool.
-- **Under 800 lines of Rust** across all source files.
+
+A built-in magnifier lens zooms in around the cursor so you can pick
+individual pixels accurately on both X11 and Wayland (wlroots compositors).
 
 ## Installation
 
@@ -122,6 +124,29 @@ Options:
 Exit code is 0 on success, non-zero on any error. Errors are printed to
 stderr.
 
+## Magnifier
+
+By default, pixl shows a zoomed-in lens that follows your cursor, rendering
+a 15×15 pixel grid scaled up so you can pick individual pixels precisely.
+The center pixel (highlighted with a red crosshair) is the one that gets
+selected on click.
+
+The magnifier works by capturing a full-screen snapshot once at startup,
+then rendering the zoomed view from that buffer on each pointer motion.
+This means it shows a static snapshot — animations or video won't update
+in the lens, but for colour picking this is not an issue.
+
+Disable it with `--no-magnifier` if you prefer a plain crosshair cursor.
+
+### Magnifier support by compositor
+
+| Compositor       | Magnifier | Notes |
+|------------------|-----------|-------|
+| X11 / Xorg       | Yes       | Overlay window with `OverrideRedirect` |
+| Hyprland / Sway  | Yes       | Layer-shell overlay via `zwlr_layer_shell_v1` |
+| KDE Plasma       | No        | Portal uses desktop's native picker (has its own zoom) |
+| GNOME            | No        | Portal uses desktop's native picker |
+
 ## How it works
 
 pixl automatically detects the display server and compositor at startup:
@@ -134,7 +159,7 @@ pixl automatically detects the display server and compositor at startup:
    - **Other compositors** (KDE Plasma, GNOME): tries the wlroots path first;
      if the protocol isn't available, falls back to calling
      `org.freedesktop.portal.Screenshot.PickColor` over D-Bus, which opens the
-     desktop's native colour picker.
+     desktop's native colour picker (which has its own zoom/magnifier).
 2. If only `$DISPLAY` is set, it's an X11 session. pixl grabs the pointer with
    a crosshair cursor and uses `GetImage` to read the pixel at the clicked
    position — the same approach as grabc.
@@ -156,8 +181,8 @@ pixl automatically detects the display server and compositor at startup:
 - On KDE Plasma and GNOME Wayland, pixl relies on `xdg-desktop-portal` and
   its backend (`xdg-desktop-portal-kde` or `xdg-desktop-portal-gnome`). These
   are typically installed by default with the desktop environment.
-- The portal path opens the desktop's own colour picker UI — pixl does not draw
-  its own overlay in this case.
+- The portal path opens the desktop's own colour picker UI (which has its own
+  zoom/magnifier) — pixl does not draw its own overlay in this case.
 - On wlroots compositors, pixl creates a fullscreen transparent overlay on the
   `zwlr_layer_shell_v1` overlay layer to intercept the click.
 
@@ -174,32 +199,34 @@ pixl automatically detects the display server and compositor at startup:
 
 ```
 src/
-├── main.rs       CLI args, session detection, dispatch
-├── wayland.rs    wlr-screencopy path (Hyprland, Sway)
-├── portal.rs     xdg-desktop-portal path (KDE, GNOME)
-├── x11.rs        X11/Xorg path via x11rb
-├── colour.rs     RgbColour and format conversions
-├── error.rs      PixlError enum (thiserror)
-└── lib.rs        Public module re-exports for tests
+├── main.rs         CLI args, session detection, dispatch
+├── magnifier.rs    Shared magnifier renderer (snapshot grid + crosshair)
+├── wayland.rs      wlr-screencopy path (Hyprland, Sway)
+├── portal.rs       xdg-desktop-portal path (KDE, GNOME)
+├── x11.rs          X11/Xorg path via x11rb
+├── colour.rs       RgbColour and format conversions
+├── error.rs        PixlError enum (thiserror)
+└── lib.rs          Public module re-exports for tests
 tests/
 └── colour_tests.rs   17 unit tests for colour conversions
 ```
 
 ## Changelog
 
+### v0.2.0 — 2026-04-15
+
+- Magnifier lens for X11 and wlroots Wayland — zooms in around the cursor with a 15×15 pixel grid and crosshair overlay
+- Full-screen snapshot capture at startup (screencopy on Wayland, GetImage on X11) used for both magnifier rendering and pixel readback
+- Magnifier window repositions to avoid screen edges
+- `--no-magnifier` now fully functional on both backends (previously was a no-op stub)
+
 ### v0.1.0 — 2026-04-15
 
-Initial release.
-
-- Pixel colour picking on X11 via `GetImage` with crosshair cursor and magnifier overlay
-- Wayland support for wlroots compositors (Hyprland, Sway) via `zwlr_screencopy_manager_v1` with transparent overlay click interception
-- Fallback to `org.freedesktop.portal.Screenshot.PickColor` over D-Bus for non-wlroots Wayland compositors (KDE Plasma, GNOME)
-- Automatic display server and compositor detection at startup
+- Pixel colour picking on X11 via `GetImage` with crosshair cursor
+- Wayland support for wlroots compositors (Hyprland, Sway) via `zwlr_screencopy_manager_v1`
+- Fallback to `org.freedesktop.portal.Screenshot.PickColor` over D-Bus for non-wlroots compositors (KDE Plasma, GNOME)
 - Four output formats: hex (default), rgb, hsl, hsv
-- `--no-magnifier` flag to disable the zoom lens on X11
-- Single static binary, zero runtime dependencies
 - 17 unit tests for colour conversions
-- Under 800 lines of Rust
 
 ## License
 
