@@ -39,9 +39,12 @@ fn detect_and_pick(magnifier: bool) -> Result<RgbColour, PixlError> {
 
     if wayland_display.is_some() {
         let desktop = env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
-        let is_wlroots = desktop
-            .split(':')
-            .any(|d| matches!(d, "Hyprland" | "sway" | "Sway" | "wlroots"));
+        let is_wlroots = desktop.split(':').any(|d| {
+            matches!(
+                d.to_lowercase().as_str(),
+                "hyprland" | "sway" | "wlroots"
+            )
+        });
 
         if is_wlroots {
             wayland::pick_colour(magnifier)

@@ -65,13 +65,20 @@ pub fn pick_colour() -> Result<RgbColour, PixlError> {
             PixlError::PortalUnavailable(format!("failed to listen for portal response: {}", e))
         })?;
 
-    // Process D-Bus messages until we get the response
+    // Process D-Bus messages until we get the response (timeout after 120 s)
+    let deadline = std::time::Instant::now() + Duration::from_secs(120);
     loop {
         conn.process(Duration::from_millis(200))
             .map_err(|e| PixlError::PortalUnavailable(format!("D-Bus processing error: {}", e)))?;
 
         if let Ok(result) = rx.try_recv() {
             return result;
+        }
+
+        if std::time::Instant::now() >= deadline {
+            return Err(PixlError::PortalUnavailable(
+                "portal response timed out after 120 s".into(),
+            ));
         }
     }
 }
@@ -106,9 +113,9 @@ fn parse_pick_color_response(
     }
 
     Ok(RgbColour {
-        r: (channels[0] * 255.0).round() as u8,
-        g: (channels[1] * 255.0).round() as u8,
-        b: (channels[2] * 255.0).round() as u8,
+        r: (channels[0].clamp(0.0, 1.0) * 255.0).round() as u8,
+        g: (channels[1].clamp(0.0, 1.0) * 255.0).round() as u8,
+        b: (channels[2].clamp(0.0, 1.0) * 255.0).round() as u8,
     })
 }
 
