@@ -79,9 +79,7 @@ pub fn render(snap: &Snapshot, cx: i32, cy: i32) -> Vec<u8> {
                     let at_center_border =
                         is_center && (px == SCALE - 1 || py == SCALE - 1);
 
-                    let (pr, pg, pb) = if at_center_border {
-                        cross
-                    } else if at_edge && on_crosshair {
+                    let (pr, pg, pb) = if at_center_border || (at_edge && on_crosshair) {
                         cross
                     } else if at_edge {
                         border
