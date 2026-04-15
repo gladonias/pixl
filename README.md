@@ -185,6 +185,22 @@ tests/
 └── colour_tests.rs   17 unit tests for colour conversions
 ```
 
+## Changelog
+
+### v0.1.0 — 2026-04-15
+
+Initial release.
+
+- Pixel colour picking on X11 via `GetImage` with crosshair cursor and magnifier overlay
+- Wayland support for wlroots compositors (Hyprland, Sway) via `zwlr_screencopy_manager_v1` with transparent overlay click interception
+- Fallback to `org.freedesktop.portal.Screenshot.PickColor` over D-Bus for non-wlroots Wayland compositors (KDE Plasma, GNOME)
+- Automatic display server and compositor detection at startup
+- Four output formats: hex (default), rgb, hsl, hsv
+- `--no-magnifier` flag to disable the zoom lens on X11
+- Single static binary, zero runtime dependencies
+- 17 unit tests for colour conversions
+- Under 800 lines of Rust
+
 ## License
 
 AGPL-3.0-or-later
