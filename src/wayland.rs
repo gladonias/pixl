@@ -7,7 +7,7 @@
 use crate::colour::RgbColour;
 use crate::error::PixlError;
 use crate::magnifier;
-use std::os::unix::io::AsFd;
+use std::os::unix::io::{AsFd, AsRawFd};
 use wayland_client::protocol::{
     wl_buffer, wl_compositor, wl_output, wl_pointer, wl_registry, wl_seat, wl_shm, wl_shm_pool,
     wl_surface,
@@ -56,115 +56,95 @@ pub fn pick_colour(use_magnifier: bool) -> Result<RgbColour, PixlError> {
         None
     };
 
-    // Phase 2: overlay surface to capture click
+    // Phase 2: full-screen overlay surface to capture pointer + click globally.
+    // We always use a fullscreen layer surface so that pointer motion events
+    // fire across the whole screen (not just over the magnifier rectangle) and
+    // so that surface-local pointer coordinates match screen coordinates.
     let surface = compositor.create_surface(&qh, ());
-    let mag_size = magnifier::SIZE;
+    let ls = layer_shell.get_layer_surface(
+        &surface,
+        None,
+        zwlr_layer_shell_v1::Layer::Overlay,
+        "pixl".into(),
+        &qh,
+        (),
+    );
+    ls.set_anchor(
+        zwlr_layer_surface_v1::Anchor::Top
+            | zwlr_layer_surface_v1::Anchor::Bottom
+            | zwlr_layer_surface_v1::Anchor::Left
+            | zwlr_layer_surface_v1::Anchor::Right,
+    );
+    ls.set_exclusive_zone(-1);
+    ls.set_keyboard_interactivity(zwlr_layer_surface_v1::KeyboardInteractivity::None);
+    surface.commit();
+    queue.roundtrip(&mut st).map_err(wl_err)?;
 
-    let ls = if use_magnifier {
-        // Small magnifier-sized overlay, positioned later
-        let ls = layer_shell.get_layer_surface(
-            &surface,
-            None,
-            zwlr_layer_shell_v1::Layer::Overlay,
-            "pixl".into(),
-            &qh,
-            (),
-        );
-        ls.set_anchor(zwlr_layer_surface_v1::Anchor::Top | zwlr_layer_surface_v1::Anchor::Left);
-        ls.set_exclusive_zone(-1);
-        ls.set_keyboard_interactivity(zwlr_layer_surface_v1::KeyboardInteractivity::None);
-        ls.set_size(mag_size as u32, mag_size as u32);
-        surface.commit();
-        queue.roundtrip(&mut st).map_err(wl_err)?;
-        ls
-    } else {
-        // Full-screen transparent overlay to capture click
-        let ls = layer_shell.get_layer_surface(
-            &surface,
-            None,
-            zwlr_layer_shell_v1::Layer::Overlay,
-            "pixl".into(),
-            &qh,
-            (),
-        );
-        ls.set_anchor(
-            zwlr_layer_surface_v1::Anchor::Top
-                | zwlr_layer_surface_v1::Anchor::Bottom
-                | zwlr_layer_surface_v1::Anchor::Left
-                | zwlr_layer_surface_v1::Anchor::Right,
-        );
-        ls.set_exclusive_zone(-1);
-        ls.set_keyboard_interactivity(zwlr_layer_surface_v1::KeyboardInteractivity::None);
-        surface.commit();
-        queue.roundtrip(&mut st).map_err(wl_err)?;
-        ls
-    };
-
-    if let Some(serial) = st.configure_serial.take() {
-        ls.ack_configure(serial);
-        if use_magnifier {
-            // Attach initial magnifier buffer
-            let buf_size = mag_size * mag_size * 4;
-            let fd = create_shm_file(buf_size as usize)?;
-            let pool = shm.create_pool(fd.as_fd(), buf_size, &qh, ());
-            let buf = pool.create_buffer(
-                0,
-                mag_size,
-                mag_size,
-                mag_size * 4,
-                wl_shm::Format::Argb8888,
-                &qh,
-                (),
-            );
-            surface.attach(Some(&buf), 0, 0);
-            surface.commit();
+    let serial = st
+        .configure_serial
+        .take()
+        .ok_or_else(|| wl_err("no layer-surface configure event"))?;
+    let (mut w, mut h) = (st.configure_w as i32, st.configure_h as i32);
+    // Fallback: some compositors may send (0, 0) asking us to choose; use the
+    // snapshot dimensions when available.
+    if w <= 0 || h <= 0 {
+        if let Some(ref s) = snap {
+            w = s.width;
+            h = s.height;
         } else {
-            // 1x1 transparent pixel
-            let fd = create_shm_file(4)?;
-            let pool = shm.create_pool(fd.as_fd(), 4, &qh, ());
-            let buf = pool.create_buffer(0, 1, 1, 4, wl_shm::Format::Argb8888, &qh, ());
-            surface.attach(Some(&buf), 0, 0);
-            surface.commit();
+            return Err(PixlError::WaylandError(format!(
+                "invalid configure size {}x{}",
+                w, h
+            )));
         }
     }
+    ls.ack_configure(serial);
+
+    // Allocate a single full-screen ARGB8888 buffer, mmap'd, and reuse it for
+    // every redraw. Start fully transparent; the magnifier is painted into a
+    // sub-rect on motion events.
+    let stride = w * 4;
+    let buf_size = (stride as usize) * (h as usize);
+    let mut shm_buf = ShmBuffer::new(buf_size)?;
+    let pool = shm.create_pool(shm_buf.file.as_fd(), buf_size as i32, &qh, ());
+    let buffer = pool.create_buffer(0, w, h, stride, wl_shm::Format::Argb8888, &qh, ());
+
+    surface.attach(Some(&buffer), 0, 0);
+    surface.damage_buffer(0, 0, w, h);
+    surface.commit();
 
     let _ptr = seat.get_pointer(&qh, ());
 
-    // Store magnifier state for the event loop
     st.use_magnifier = use_magnifier;
     st.mag_needs_redraw = false;
+    let mut prev_mag: Option<(i32, i32)> = None;
 
     loop {
         queue.blocking_dispatch(&mut st).map_err(wl_err)?;
 
-        // Redraw magnifier on motion
         if st.use_magnifier && st.mag_needs_redraw {
             st.mag_needs_redraw = false;
             if let Some(ref s) = snap {
                 let cx = st.ptr_x as i32;
                 let cy = st.ptr_y as i32;
-
+                let (mx, my) = magnifier::position(cx, cy, w, h);
                 let rendered = magnifier::render(s, cx, cy);
-                let buf_size = (mag_size * mag_size * 4) as usize;
-                let fd = create_shm_file(buf_size)?;
-                write_shm(&fd, &rendered)?;
-                let pool = shm.create_pool(fd.as_fd(), buf_size as i32, &qh, ());
-                let buf = pool.create_buffer(
-                    0,
-                    mag_size,
-                    mag_size,
-                    mag_size * 4,
-                    wl_shm::Format::Argb8888,
-                    &qh,
-                    (),
-                );
-                surface.attach(Some(&buf), 0, 0);
-                surface.damage_buffer(0, 0, mag_size, mag_size);
+                let stride_usize = stride as usize;
 
-                // Reposition via margin (layer shell anchored top-left)
-                let (mx, my) = magnifier::position(cx, cy, s.width, s.height);
-                ls.set_margin(my, 0, 0, mx);
+                let slice = shm_buf.as_mut_slice();
+                if let Some((ox, oy)) = prev_mag {
+                    clear_rect(slice, stride_usize, ox, oy, magnifier::SIZE, w, h);
+                }
+                blit_rect(slice, stride_usize, mx, my, magnifier::SIZE, w, h, &rendered);
+
+                surface.attach(Some(&buffer), 0, 0);
+                if let Some((ox, oy)) = prev_mag {
+                    surface.damage_buffer(ox, oy, magnifier::SIZE, magnifier::SIZE);
+                }
+                surface.damage_buffer(mx, my, magnifier::SIZE, magnifier::SIZE);
                 surface.commit();
+
+                prev_mag = Some((mx, my));
             }
         }
 
@@ -173,9 +153,12 @@ pub fn pick_colour(use_magnifier: bool) -> Result<RgbColour, PixlError> {
         }
     }
 
+    buffer.destroy();
+    pool.destroy();
     ls.destroy();
     surface.destroy();
     queue.roundtrip(&mut st).map_err(wl_err)?;
+    drop(shm_buf);
 
     let (cx, cy) = st
         .click
@@ -241,6 +224,11 @@ fn capture_full_output(
             break;
         }
     }
+    if let Some(f) = st.sc_frame.take() {
+        f.destroy();
+    }
+    buffer.destroy();
+    pool.destroy();
     if st.frame_failed {
         return Err(PixlError::CaptureError("screencopy capture failed".into()));
     }
@@ -313,6 +301,11 @@ fn capture_single_pixel(
             break;
         }
     }
+    if let Some(f) = st.sc_frame.take() {
+        f.destroy();
+    }
+    buffer.destroy();
+    pool.destroy();
     if st.frame_failed {
         return Err(PixlError::CaptureError("screencopy capture failed".into()));
     }
@@ -335,6 +328,8 @@ struct State {
     screencopy: Option<zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1>,
     outputs: Vec<wl_output::WlOutput>,
     configure_serial: Option<u32>,
+    configure_w: u32,
+    configure_h: u32,
     click: Option<(i32, i32)>,
     ptr_x: f64,
     ptr_y: f64,
@@ -426,8 +421,15 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for State {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let zwlr_layer_surface_v1::Event::Configure { serial, .. } = event {
+        if let zwlr_layer_surface_v1::Event::Configure {
+            serial,
+            width,
+            height,
+        } = event
+        {
             st.configure_serial = Some(serial);
+            st.configure_w = width;
+            st.configure_h = height;
         }
     }
 }
@@ -477,6 +479,104 @@ delegate_noop!(State: ignore wl_output::WlOutput);
 delegate_noop!(State: ignore zwlr_layer_shell_v1::ZwlrLayerShellV1);
 delegate_noop!(State: ignore zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1);
 
+/// A shm-backed buffer that is both shared with the Wayland compositor
+/// (via `wl_shm.create_pool`) and mmap'd in our own address space so we
+/// can repaint sub-regions without reallocating.
+struct ShmBuffer {
+    file: std::fs::File,
+    ptr: *mut u8,
+    size: usize,
+}
+
+impl ShmBuffer {
+    fn new(size: usize) -> Result<Self, PixlError> {
+        let file = create_shm_file(size)?;
+        let ptr = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                size,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED,
+                file.as_raw_fd(),
+                0,
+            )
+        };
+        if ptr == libc::MAP_FAILED {
+            return Err(PixlError::WaylandError(format!(
+                "mmap: {}",
+                std::io::Error::last_os_error()
+            )));
+        }
+        Ok(Self {
+            file,
+            ptr: ptr as *mut u8,
+            size,
+        })
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.size) }
+    }
+}
+
+impl Drop for ShmBuffer {
+    fn drop(&mut self) {
+        unsafe {
+            libc::munmap(self.ptr as *mut _, self.size);
+        }
+    }
+}
+
+/// Clear a (possibly out-of-bounds) rectangle in an ARGB8888 buffer to zero.
+fn clear_rect(buf: &mut [u8], stride: usize, x: i32, y: i32, size: i32, w: i32, h: i32) {
+    let xs = x.max(0);
+    let ys = y.max(0);
+    let xe = (x + size).min(w);
+    let ye = (y + size).min(h);
+    if xs >= xe || ys >= ye {
+        return;
+    }
+    for row in ys..ye {
+        let start = row as usize * stride + xs as usize * 4;
+        let end = row as usize * stride + xe as usize * 4;
+        for b in &mut buf[start..end] {
+            *b = 0;
+        }
+    }
+}
+
+/// Copy a `size × size` ARGB8888 tile `src` into `buf` at (x, y), clipped
+/// to the buffer's (w, h) bounds.
+#[allow(clippy::too_many_arguments)]
+fn blit_rect(
+    buf: &mut [u8],
+    stride: usize,
+    x: i32,
+    y: i32,
+    size: i32,
+    w: i32,
+    h: i32,
+    src: &[u8],
+) {
+    let xs = x.max(0);
+    let ys = y.max(0);
+    let xe = (x + size).min(w);
+    let ye = (y + size).min(h);
+    if xs >= xe || ys >= ye {
+        return;
+    }
+    let src_stride = size as usize * 4;
+    let copy_len = (xe - xs) as usize * 4;
+    for row in ys..ye {
+        let sy = (row - y) as usize;
+        let sx = (xs - x) as usize;
+        let src_start = sy * src_stride + sx * 4;
+        let dst_start = row as usize * stride + xs as usize * 4;
+        buf[dst_start..dst_start + copy_len]
+            .copy_from_slice(&src[src_start..src_start + copy_len]);
+    }
+}
+
 fn create_shm_file(size: usize) -> Result<std::fs::File, PixlError> {
     use std::ffi::CString;
     use std::os::unix::io::FromRawFd;
@@ -499,16 +599,6 @@ fn create_shm_file(size: usize) -> Result<std::fs::File, PixlError> {
     let file = unsafe { std::fs::File::from_raw_fd(fd) };
     file.set_len(size as u64).map_err(wl_err)?;
     Ok(file)
-}
-
-fn write_shm(file: &std::fs::File, data: &[u8]) -> Result<(), PixlError> {
-    use std::io::{Seek, Write};
-    let mut f = file;
-    f.seek(std::io::SeekFrom::Start(0))
-        .map_err(|e| PixlError::CaptureError(e.to_string()))?;
-    f.write_all(data)
-        .map_err(|e| PixlError::CaptureError(e.to_string()))?;
-    Ok(())
 }
 
 fn read_shm(file: &std::fs::File, buf: &mut [u8]) -> Result<(), PixlError> {
