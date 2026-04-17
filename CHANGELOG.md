@@ -2,6 +2,12 @@
 
 All notable changes to pixl are documented in this file.
 
+## v0.2.2 — 2026-04-17
+
+- Fix Wayland magnifier on wlroots: the lens now follows the cursor across the whole screen instead of only the top-left 165×165 region, and the clicked pixel is read from the correct screen position
+- Reuse a single mmap'd shared-memory buffer for the overlay instead of allocating a new shm file, pool, and buffer on every pointer motion — eliminates per-frame allocation churn and the associated FD/buffer leak in long picking sessions
+- Release `zwlr_screencopy_frame_v1`, `wl_buffer`, and `wl_shm_pool` objects after use on the Wayland backend
+
 ## v0.2.1 — 2026-04-15
 
 - Fix unbounded D-Bus event loop in the portal backend — now times out after 120 s instead of blocking forever
