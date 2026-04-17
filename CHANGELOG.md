@@ -2,6 +2,10 @@
 
 All notable changes to pixl are documented in this file.
 
+## v0.2.3 — 2026-04-17
+
+- Fix magnifier crosshair misalignment — the crosshair intersection now points to the center of the sampled pixel instead of its top-left corner
+
 ## v0.2.2 — 2026-04-17
 
 - Fix Wayland magnifier on wlroots: the lens now follows the cursor across the whole screen instead of only the top-left 165×165 region, and the clicked pixel is read from the correct screen position

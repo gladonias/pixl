@@ -67,7 +67,6 @@ pub fn render(snap: &Snapshot, cx: i32, cy: i32) -> Vec<u8> {
             let (r, g, b) = snap.pixel_rgb(sx, sy);
 
             let is_center = gx == HALF && gy == HALF;
-            let on_crosshair = gx == HALF || gy == HALF;
 
             for py in 0..SCALE {
                 for px in 0..SCALE {
@@ -76,10 +75,12 @@ pub fn render(snap: &Snapshot, cx: i32, cy: i32) -> Vec<u8> {
                     let off = (oy * stride + ox * 4) as usize;
 
                     let at_edge = px == 0 || py == 0;
-                    let at_center_border =
-                        is_center && (px == SCALE - 1 || py == SCALE - 1);
+                    let on_cross_line = (gx == HALF && px == SCALE / 2)
+                        || (gy == HALF && py == SCALE / 2);
+                    let at_center_border = is_center
+                        && (px == 0 || py == 0 || px == SCALE - 1 || py == SCALE - 1);
 
-                    let (pr, pg, pb) = if at_center_border || (at_edge && on_crosshair) {
+                    let (pr, pg, pb) = if on_cross_line || at_center_border {
                         cross
                     } else if at_edge {
                         border
